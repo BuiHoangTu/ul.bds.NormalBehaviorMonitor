@@ -39,7 +39,7 @@ def getColumns():
     return readTurbine().columns
 
 
-def readStackedTurbineData(
+def getStackedTurbineData(
     name: str,
     n_days=5,
     shift=1,
@@ -109,6 +109,6 @@ def readStackedTurbineData(
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")
-        dset, f = readStackedTurbineData(turbine)
+        dset, f = getStackedTurbineData(turbine)
         print(dset.shape)
         f.close()

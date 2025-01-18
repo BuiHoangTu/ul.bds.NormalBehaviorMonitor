@@ -3,3 +3,6 @@ __pycache__/
 
 Wind-Turbine-SCADA-signals-2017_0.csv
 Wind-Turbine-SCADA-signals.csv
+
+
+/tmp/**

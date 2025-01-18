@@ -30,6 +30,8 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
 
     if name:
         dfTurbine = dfData[dfData["turbineid"] == name]
+    else:
+        dfTurbine = dfData
     dfTurbine.loc[dfTurbine["avgpower"] < 10, "avgpower"] = np.nan
 
     return dfTurbine

@@ -8,7 +8,7 @@ import pandas as pd
 from data import parquet
 
 
-def listTurbines():
+def listTurbines() -> list[str]:
     dfData = parquet.read("./data/Carrickallen.parquet")
     return dfData["turbineid"].unique().tolist()
 

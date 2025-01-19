@@ -8,6 +8,16 @@ import pandas as pd
 from data import parquet
 
 
+REMOVED_COLUMNS = [  # columns that are for sure not needed
+    "turbineid",
+    "datetime",
+    "site",
+    "phase",
+    "manufacturer",
+    "model",
+]
+
+
 def listTurbines() -> list[str]:
     dfData = parquet.read("./data/Carrickallen.parquet")
     return dfData["turbineid"].unique().tolist()
@@ -38,7 +48,7 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
 
 
 def getColumns():
-    return readTurbine().columns
+    return readTurbine().columns.difference(REMOVED_COLUMNS, False)
 
 
 def getStackedTurbineData(
@@ -80,16 +90,7 @@ def getStackedTurbineData(
 
     timeSteps = n_days * N_ROWS_PER_DAY
 
-    dfReduced = dfFilled.drop(
-        columns=[  # drop columns that are for sure not needed
-            "turbineid",
-            "datetime",
-            "site",
-            "phase",
-            "manufacturer",
-            "model",
-        ]
-    )
+    dfReduced = dfFilled.drop(columns=REMOVED_COLUMNS)
 
     arrayReduced = dfReduced.to_numpy()
     arrayReduced = arrayReduced.astype(np.float32)

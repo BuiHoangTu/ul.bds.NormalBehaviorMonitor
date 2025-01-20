@@ -1,3 +1,4 @@
+from functools import cache
 from pathlib import Path
 from typing import Optional
 
@@ -18,6 +19,7 @@ REMOVED_COLUMNS = [  # columns that are for sure not needed
 ]
 
 
+@cache
 def listTurbines() -> list[str]:
     dfData = parquet.read("./data/Carrickallen.parquet")
     return dfData["turbineid"].unique().tolist()
@@ -47,6 +49,7 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
     return dfTurbine
 
 
+@cache
 def getColumns():
     return readTurbine().columns.difference(REMOVED_COLUMNS, False)
 

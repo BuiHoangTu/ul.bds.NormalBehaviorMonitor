@@ -111,6 +111,109 @@ def getStackedTurbineData(
     return dset, f
 
 
+def filterUnderperformValid(
+    turbineData2d,
+    idUnderperformanceprobabilityvalid,
+    maxConsecutiveInvalid=3,
+    maxInvalidRate=0.1,
+):
+    nContinuousInvalid = 0
+    nInvalid = 0
+
+    for timeStep in turbineData2d:
+        if timeStep[idUnderperformanceprobabilityvalid] == 0:
+            nContinuousInvalid += 1
+            nInvalid += 1
+
+            if nContinuousInvalid > maxConsecutiveInvalid:
+                return False
+            if nInvalid > maxInvalidRate * len(turbineData2d):
+                return False
+
+        else:
+            nContinuousInvalid = 0
+    return True
+
+
+def filterUnderperformProba(
+    turbineData2d,
+    idUnderperformanceproba,
+    underperformThreshold=0.7,
+    maxConsecutiveUnderperform=3,
+    maxUnderperformRate=0.1,
+):
+    if underperformThreshold >= 1:
+        return True
+
+    nContinuousUnderperform = 0
+    nUnderperform = 0
+
+    for timeStep in turbineData2d:
+        if timeStep[idUnderperformanceproba] > underperformThreshold:
+            nContinuousUnderperform += 1
+            nUnderperform += 1
+
+            if nContinuousUnderperform > maxConsecutiveUnderperform:
+                return False
+            if nUnderperform > maxUnderperformRate * len(turbineData2d):
+                return False
+
+        else:
+            nContinuousUnderperform = 0
+    return True
+
+
+def getValidData(
+    name: str,
+    maxConsecutiveInvalid=3,
+    maxInvalidRate=0.1,
+    underperformThreshold=0.7,
+    maxConsecutiveUnderperform=3,
+    maxUnderperformRate=0.1,
+    verbose=False,
+):
+    turbineData3d, f = getStackedTurbineData(name)
+
+    columns = getColumns()
+    
+    idUnderperformValid = columns.get_loc("underperformanceprobabilityvalid")
+    validness = []
+    for i in range(turbineData3d.shape[0]):
+        validness.append(
+            filterUnderperformValid(
+                turbineData3d[i],
+                idUnderperformValid,
+                maxConsecutiveInvalid,
+                maxInvalidRate,
+            )
+        )
+    validness = np.array(validness)
+    if verbose:
+        print(f"Valid: {sum(validness)}")
+
+    idUnderperformProba = columns.get_loc("underperformanceprobability")
+    notUnderperformness = []
+    for i in range(turbineData3d.shape[0]):
+        notUnderperformness.append(
+            filterUnderperformProba(
+                turbineData3d[i],
+                idUnderperformProba,
+                underperformThreshold,
+                maxConsecutiveUnderperform,
+                maxUnderperformRate,
+            )
+        )
+    notUnderperformness = np.array(notUnderperformness)
+    if verbose:
+        print(f"Not underperform: {sum(notUnderperformness)}")
+    
+    normalIndices = np.where(validness & notUnderperformness)[0]
+    if verbose:
+        print(f"Normal: {len(normalIndices)}")
+
+    return turbineData3d, normalIndices, f
+
+
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")

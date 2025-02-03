@@ -111,107 +111,141 @@ def getStackedTurbineData(
     return dset, f
 
 
-def filterUnderperformValid(
-    turbineData2d,
-    idUnderperformanceprobabilityvalid,
-    maxConsecutiveInvalid=3,
-    maxInvalidRate=0.1,
-):
-    nContinuousInvalid = 0
-    nInvalid = 0
+class TurbineData:
+    USING_TURBINES = set()
+    COL_UNDERPERFORMANCE_PROBA = "underperformanceprobability"
+    COL_UNDERPERFORMANCE_PROBA_VALID = "underperformanceprobabilityvalid"
 
-    for timeStep in turbineData2d:
-        if timeStep[idUnderperformanceprobabilityvalid] == 0:
-            nContinuousInvalid += 1
-            nInvalid += 1
+    def __init__(self, turbineName: str, verbose=False):
+        self.turbineName = turbineName
+        self.verbose = verbose
 
-            if nContinuousInvalid > maxConsecutiveInvalid:
-                return False
-            if nInvalid > maxInvalidRate * len(turbineData2d):
-                return False
+        if verbose:
+            if turbineName in TurbineData.USING_TURBINES:
+                print(f"Warning: {turbineName} is already in use")
+        TurbineData.USING_TURBINES.add(turbineName)
 
-        else:
-            nContinuousInvalid = 0
-    return True
+        self.data3d, self.f = getStackedTurbineData(turbineName)
+        self.columns = getColumns()
 
+        self.idUnderperformProba = self.getIdOfColumn(self.COL_UNDERPERFORMANCE_PROBA)
+        self.idUnderperformValid = self.getIdOfColumn(
+            self.COL_UNDERPERFORMANCE_PROBA_VALID
+        )
 
-def filterUnderperformProba(
-    turbineData2d,
-    idUnderperformanceproba,
-    underperformThreshold=0.7,
-    maxConsecutiveUnderperform=3,
-    maxUnderperformRate=0.1,
-):
-    if underperformThreshold >= 1:
+    def getIdOfColumn(self, columnName: str) -> int:
+        """
+        Get the index of a column in the dataset
+
+        Args:
+            columnName (str): name of the column
+
+        Returns:
+            int: index of the column
+
+        Raises:
+            KeyError: if the column does not exist
+        """
+        return self.columns.get_loc(columnName)  # type: ignore # overload's bug
+
+    def _evalUnderperformValid(
+        self, turbineData2d, maxConsecutiveInvalid, maxInvalidRate
+    ):
+        nContinuousInvalid = 0
+        nInvalid = 0
+
+        for timeStep in turbineData2d:
+            if timeStep[self.idUnderperformValid] == 0:
+                nContinuousInvalid += 1
+                nInvalid += 1
+
+                if nContinuousInvalid > maxConsecutiveInvalid:
+                    return False
+                if nInvalid > maxInvalidRate * len(turbineData2d):
+                    return False
+
+            else:
+                nContinuousInvalid = 0
         return True
 
-    nContinuousUnderperform = 0
-    nUnderperform = 0
+    def _evalUnderperformProba(
+        self,
+        turbineData2d,
+        underperformThreshold,
+        maxConsecutiveUnderperform,
+        maxUnderperformRate,
+    ):
+        if underperformThreshold >= 1:
+            return True
 
-    for timeStep in turbineData2d:
-        if timeStep[idUnderperformanceproba] > underperformThreshold:
-            nContinuousUnderperform += 1
-            nUnderperform += 1
+        nContinuousUnderperform = 0
+        nUnderperform = 0
 
-            if nContinuousUnderperform > maxConsecutiveUnderperform:
-                return False
-            if nUnderperform > maxUnderperformRate * len(turbineData2d):
-                return False
+        for timeStep in turbineData2d:
+            if timeStep[self.idUnderperformProba] > underperformThreshold:
+                nContinuousUnderperform += 1
+                nUnderperform += 1
 
-        else:
-            nContinuousUnderperform = 0
-    return True
+                if nContinuousUnderperform > maxConsecutiveUnderperform:
+                    return False
+                if nUnderperform > maxUnderperformRate * len(turbineData2d):
+                    return False
 
+            else:
+                nContinuousUnderperform = 0
+        return True
 
-def getValidData(
-    name: str,
-    maxConsecutiveInvalid=3,
-    maxInvalidRate=0.1,
-    underperformThreshold=0.7,
-    maxConsecutiveUnderperform=3,
-    maxUnderperformRate=0.1,
-    verbose=False,
-):
-    turbineData3d, f = getStackedTurbineData(name)
-
-    columns = getColumns()
-    
-    idUnderperformValid = columns.get_loc("underperformanceprobabilityvalid")
-    validness = []
-    for i in range(turbineData3d.shape[0]):
-        validness.append(
-            filterUnderperformValid(
-                turbineData3d[i],
-                idUnderperformValid,
-                maxConsecutiveInvalid,
-                maxInvalidRate,
+    def getNormalIndices(
+        self,
+        maxConsecutiveInvalid=3,
+        maxInvalidRate=0.1,
+        underperformThreshold=0.7,
+        maxConsecutiveUnderperform=3,
+        maxUnderperformRate=0.1,
+    ):
+        validness = []
+        for i in range(self.data3d.shape[0]):
+            validness.append(
+                self._evalUnderperformValid(
+                    self.data3d[i],
+                    maxConsecutiveInvalid,
+                    maxInvalidRate,
+                )
             )
-        )
-    validness = np.array(validness)
-    if verbose:
-        print(f"Valid: {sum(validness)}")
+        validness = np.array(validness)
+        if self.verbose:
+            print(f"Valid: {sum(validness)}")
 
-    idUnderperformProba = columns.get_loc("underperformanceprobability")
-    notUnderperformness = []
-    for i in range(turbineData3d.shape[0]):
-        notUnderperformness.append(
-            filterUnderperformProba(
-                turbineData3d[i],
-                idUnderperformProba,
-                underperformThreshold,
-                maxConsecutiveUnderperform,
-                maxUnderperformRate,
+        notUnderperformness = []
+        for i in range(self.data3d.shape[0]):
+            notUnderperformness.append(
+                self._evalUnderperformProba(
+                    self.data3d[i],
+                    underperformThreshold,
+                    maxConsecutiveUnderperform,
+                    maxUnderperformRate,
+                )
             )
-        )
-    notUnderperformness = np.array(notUnderperformness)
-    if verbose:
-        print(f"Not underperform: {sum(notUnderperformness)}")
-    
-    normalIndices = np.where(validness & notUnderperformness)[0]
-    if verbose:
-        print(f"Normal: {len(normalIndices)}")
+        notUnderperformness = np.array(notUnderperformness)
+        if self.verbose:
+            print(f"Not underperform: {sum(notUnderperformness)}")
 
-    return turbineData3d, normalIndices, f
+        normalIndices = np.where(validness & notUnderperformness)[0]
+        if self.verbose:
+            print(f"Normal: {len(normalIndices)}")
+
+        return normalIndices
+
+    def close(self):
+        self.f.close()
+        try:
+            TurbineData.USING_TURBINES.remove(self.turbineName)
+        except KeyError:
+            if self.verbose:
+                print(f"Warning: Data tracking is broken, {self.turbineName} is not tracked when closing")
+
+    def __del__(self):
+        self.close()
 
 
 if __name__ == "__main__":

@@ -44,7 +44,6 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
         dfTurbine = dfData[dfData["turbineid"] == name]
     else:
         dfTurbine = dfData
-    dfTurbine.loc[dfTurbine["avgpower"] < 10, "avgpower"] = np.nan
 
     return dfTurbine
 
@@ -115,6 +114,6 @@ def getStackedTurbineData(
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")
-        dset, f = getStackedTurbineData(turbine)
+        dset, f = getStackedTurbineData(turbine, recompute=True)
         print(dset.shape)
         f.close()

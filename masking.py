@@ -37,5 +37,13 @@ class MaskedConv2d(nn.Conv2d):
 
     def forward(self, x, mask):
         out = super().forward(x)
-        maskOut = F.max_pool2d(mask, self.kernel_size, self.stride, self.padding)  # type: ignore # type ensured by __init__
+
+        try:
+            maskOut = F.max_pool2d(mask, self.kernel_size, self.stride, self.padding)  # type: ignore # type ensured by __init__
+        except RuntimeError as e:
+            if "Output size is too small" in str(e):
+                # it is okay for last layer
+                maskOut = None
+            else:
+                raise e
         return out, maskOut

@@ -7,10 +7,10 @@ def maskedMseLoss(pred, target, mask):
     Compute the masked mean squared error loss.
     """
 
-    se = (pred - target) ** 2
-    maskedSe = se * mask
-
-    return maskedSe.sum() / mask.sum()
+    mask = mask.unsqueeze(-1).expand_as(pred)
+    loss = F.mse_loss(pred * mask, target * mask)
+    
+    return loss
 
 
 class MaskedConv2d(nn.Conv2d):

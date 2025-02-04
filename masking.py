@@ -1,0 +1,41 @@
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+def maskedMseLoss(pred, target, mask):
+    """
+    Compute the masked mean squared error loss.
+    """
+
+    se = (pred - target) ** 2
+    maskedSe = se * mask
+
+    return maskedSe.sum() / mask.sum()
+
+
+class MaskedConv2d(nn.Conv2d):
+    """
+    Custom masked convolution layer.
+    """
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        padding=0,
+        *args,
+        **kwargs
+    ):
+        if isinstance(padding, str):
+            raise ValueError("Only numeric padding is supported")
+
+        super().__init__(
+            in_channels, out_channels, kernel_size, stride, padding, *args, **kwargs
+        )
+
+    def forward(self, x, mask):
+        out = super().forward(x)
+        maskOut = F.max_pool2d(mask, self.kernel_size, self.stride, self.padding)  # type: ignore # type ensured by __init__
+        return out, maskOut

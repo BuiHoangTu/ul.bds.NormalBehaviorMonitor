@@ -86,7 +86,6 @@ def main():
                     + str(x.shape[0 : xShapeLen - 1])
                 )
 
-            mask = torch.tensor(mask, dtype=torch.float32)
             maskAdd1 = mask.unsqueeze(-1).expand_as(x)
             x = x * maskAdd1 + (1 - maskAdd1) * self.maskEmbed
 
@@ -147,7 +146,7 @@ def main():
     # pass a random tensor to the model
     x = torch.randn(32, 1, 720, 5)
 
-    output = testModel(x, mask=np.ones(x.shape[:3]))
+    output = testModel(x, mask=torch.ones(x.shape[:3]))
 
     print(f"Expected output shape: {x.shape}")
     print(f"Output shape: {output.shape}")
@@ -162,7 +161,7 @@ def main():
 
     trainLoader = DataLoader(trainSet, batch_size=32, shuffle=True, pin_memory=True)
     testLoader = DataLoader(testSet, batch_size=32, shuffle=False, pin_memory=True)
-    
+
     model = Autoencoder(1024).to(device)
     criterion = maskedMseLoss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
@@ -172,21 +171,27 @@ def main():
         epoLoss = 0
 
         for i, (x, mask) in enumerate(trainLoader):
-            x = x.to(device)
-            
+            x, mask = x.float().to(device), mask.float().to(device)
+
             reconstructions = model(x, mask)
+
+            # reconstruct is smaller than the original timeseries
+            reconstructedTimeseries = reconstructions.shape[-2]
+            # truncate the original timeseries to match the reconstructed timeseries
+            x = x[:, :, :reconstructedTimeseries, :]
+            mask = mask[:, :, :reconstructedTimeseries]
+
             loss = criterion(reconstructions, x, mask)
             epoLoss += loss.item()
-            
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            
+
             if i % 10 == 0:
                 print(f"Epoch: {epoch}, Batch: {i}, Loss: {loss.item()}")
-                
+
         print(f"Epoch: {epoch}, AvgLoss: {epoLoss / len(trainLoader)}")
-        
 
 
 if __name__ == "__main__":

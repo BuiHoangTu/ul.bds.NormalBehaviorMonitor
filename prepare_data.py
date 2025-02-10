@@ -82,6 +82,10 @@ def getStackedTurbineData(
 
     dfData = readTurbine(name)
 
+    if verbose:
+        originalLen = len(dfData)
+        originalNans = dfData.isna().sum().to_dict()
+
     # resample data
     dfData.set_index("datetime", inplace=True)
     dfData.drop(
@@ -96,10 +100,14 @@ def getStackedTurbineData(
 
     dfFilled.reset_index(inplace=True)
     dfFilled.rename(columns={"index": "datetime"}, inplace=True)
-    
+
     if verbose:
-        n_nan = dfFilled.isna().sum()
-        print(f"n_nan: {n_nan}")
+        n_nan = dfFilled.isna().sum().to_dict()
+
+        print(f"Length of data: {len(dfFilled)} / {originalLen}")
+
+        for col in n_nan:
+            print(f"\n{col}: {n_nan[col]} / {originalNans[col]}")
 
     # stack data
     N_ROWS_PER_DAY = int(24 * 60 * 60 / sampleLen_s)  # 24h in seconds / sampleLen_s

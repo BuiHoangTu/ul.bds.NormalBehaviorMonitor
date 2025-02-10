@@ -57,10 +57,13 @@ def getStackedTurbineData(
     name: str,
     n_days=5,
     shift=1,
+    sampleLen_s=10 * 60,  # default to 10 minutes
     recompute=False,
+    verbose=False,
 ) -> tuple[h5py.Dataset, h5py.File]:
 
-    dataFile = Path("tmp") / f"dataset_{name}_{n_days}_{shift}.hdf5"
+    ## >>> read cached data
+    dataFile = Path("tmp") / f"dataset_{name}_{n_days}_{shift}_{sampleLen_s}.hdf5"
     if recompute:
         if dataFile.exists():
             dataFile.unlink()
@@ -75,20 +78,23 @@ def getStackedTurbineData(
                 raise KeyError(f"Dataset {name} exists but is not a h5py.Dataset")
         else:
             f.close()
+    ## <<< read cached data
 
     dfData = readTurbine(name)
 
-    # fill missing index
-    dfData = dfData.set_index("datetime")
-    fullDateTimeRange = pd.date_range(
-        start=dfData.index.min(), end=dfData.index.max(), freq="10min"
-    )
-    dfFilled = dfData.reindex(fullDateTimeRange)
-    dfFilled = dfFilled.reset_index()
-    dfFilled = dfFilled.rename(columns={"index": "datetime"})
+    # resample data
+    dfData.set_index("datetime", inplace=True)
+    dfFilled = dfData.resample(f"{sampleLen_s}s").mean()
+
+    dfFilled.reset_index(inplace=True)
+    dfFilled.rename(columns={"index": "datetime"}, inplace=True)
+    
+    if verbose:
+        n_nan = dfFilled.isna().sum()
+        print(f"n_nan: {n_nan}")
 
     # stack data
-    N_ROWS_PER_DAY = int(24 * 60 / 10)  # 10 minutes per row
+    N_ROWS_PER_DAY = int(24 * 60 * 60 / sampleLen_s)  # 24h in seconds / sampleLen_s
 
     timeSteps = n_days * N_ROWS_PER_DAY
 
@@ -251,6 +257,6 @@ class TurbineData:
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")
-        dset, f = getStackedTurbineData(turbine, recompute=True)
+        dset, f = getStackedTurbineData(turbine, recompute=True, verbose=True)
         print(dset.shape)
         f.close()

@@ -69,7 +69,7 @@ def getStackedTurbineData(
             dataFile.unlink()
 
     if dataFile.exists():
-        f = h5py.File(dataFile, "r+")
+        f = h5py.File(dataFile, "r", swmr=True)
         if name in f:
             dset = f[name]
             if isinstance(dset, h5py.Dataset):

@@ -176,7 +176,9 @@ class TurbineData:
         nInvalid = 0
 
         for timeStep in turbineData2d:
-            if (timeStep[self.idUnderperformValid] == 0) or (timeStep[self.idUnderperformValid] == np.nan):
+            if (timeStep[self.idUnderperformValid] == 0) or (
+                timeStep[self.idUnderperformValid] == np.nan
+            ):
                 nContinuousInvalid += 1
                 nInvalid += 1
 
@@ -187,11 +189,13 @@ class TurbineData:
 
             else:
                 nContinuousInvalid = 0
-        
+
         # check if last value is valid
-        if (timeStep[self.idUnderperformValid] == 0) or (timeStep[self.idUnderperformValid] == np.nan):
+        if (timeStep[self.idUnderperformValid] == 0) or (
+            timeStep[self.idUnderperformValid] == np.nan
+        ):
             return False
-                
+
         return True
 
     def _evalUnderperformProba(
@@ -208,7 +212,9 @@ class TurbineData:
         nUnderperform = 0
 
         for timeStep in turbineData2d:
-            if (timeStep[self.idUnderperformProba] > underperformThreshold) or (timeStep[self.idUnderperformProba] == np.nan):
+            if (timeStep[self.idUnderperformProba] > underperformThreshold) or (
+                timeStep[self.idUnderperformProba] == np.nan
+            ):
                 nContinuousUnderperform += 1
                 nUnderperform += 1
 
@@ -268,7 +274,9 @@ class TurbineData:
             TurbineData.USING_TURBINES.remove(self.turbineName)
         except KeyError:
             if self.verbose:
-                print(f"Warning: Data tracking is broken, {self.turbineName} is not tracked when closing")
+                print(
+                    f"Warning: Data tracking is broken, {self.turbineName} is not tracked when closing"
+                )
 
     def __del__(self):
         self.close()

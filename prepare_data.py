@@ -176,7 +176,7 @@ class TurbineData:
         nInvalid = 0
 
         for timeStep in turbineData2d:
-            if timeStep[self.idUnderperformValid] == 0:
+            if (timeStep[self.idUnderperformValid] == 0) or (timeStep[self.idUnderperformValid] == np.nan):
                 nContinuousInvalid += 1
                 nInvalid += 1
 
@@ -187,6 +187,11 @@ class TurbineData:
 
             else:
                 nContinuousInvalid = 0
+        
+        # check if last value is valid
+        if (timeStep[self.idUnderperformValid] == 0) or (timeStep[self.idUnderperformValid] == np.nan):
+            return False
+                
         return True
 
     def _evalUnderperformProba(
@@ -203,7 +208,7 @@ class TurbineData:
         nUnderperform = 0
 
         for timeStep in turbineData2d:
-            if timeStep[self.idUnderperformProba] > underperformThreshold:
+            if (timeStep[self.idUnderperformProba] > underperformThreshold) or (timeStep[self.idUnderperformProba] == np.nan):
                 nContinuousUnderperform += 1
                 nUnderperform += 1
 

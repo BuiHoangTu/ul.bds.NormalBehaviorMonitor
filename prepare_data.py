@@ -84,6 +84,14 @@ def getStackedTurbineData(
 
     # resample data
     dfData.set_index("datetime", inplace=True)
+    dfData.drop(
+        columns=[
+            col
+            for col in REMOVED_COLUMNS
+            if (col in dfData.columns) and (col != "datetime")
+        ],
+        inplace=True,
+    )
     dfFilled = dfData.resample(f"{sampleLen_s}s").mean()
 
     dfFilled.reset_index(inplace=True)
@@ -98,21 +106,20 @@ def getStackedTurbineData(
 
     timeSteps = n_days * N_ROWS_PER_DAY
 
-    dfReduced = dfFilled.drop(columns=REMOVED_COLUMNS)
+    dfFilled = dfFilled.drop(columns=["datetime"])
+    arrayFilled = dfFilled.to_numpy()
+    arrayFilled = arrayFilled.astype(np.float32)
 
-    arrayReduced = dfReduced.to_numpy()
-    arrayReduced = arrayReduced.astype(np.float32)
-
-    n_stack = (len(arrayReduced) - timeSteps) // shift
+    n_stack = (len(arrayFilled) - timeSteps) // shift
 
     f = h5py.File(dataFile, "a")
     dset = f.create_dataset(
         name,
-        (n_stack, timeSteps, arrayReduced.shape[1]),
+        (n_stack, timeSteps, arrayFilled.shape[1]),
         dtype=np.float32,
     )
     for i in range(n_stack):
-        dset[i] = arrayReduced[i * shift : i * shift + timeSteps]
+        dset[i] = arrayFilled[i * shift : i * shift + timeSteps]
 
     return dset, f
 

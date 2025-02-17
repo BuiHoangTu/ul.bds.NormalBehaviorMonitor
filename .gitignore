@@ -7,4 +7,4 @@ Wind-Turbine-SCADA-signals.csv
 
 /tmp/**
 
-/dev.*
+/dev.py

@@ -3,6 +3,12 @@ from torch.utils.data import Dataset
 
 
 class TurbineDataset(Dataset):
+    """Contains dataset and the mask for the dataset with 1 addition dimension for channel
+
+    Args:
+        Dataset (_type_): _description_
+    """
+    
     def __init__(
         self,
         turbineData3d,

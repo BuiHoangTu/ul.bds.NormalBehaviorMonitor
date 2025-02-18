@@ -1,3 +1,4 @@
+from typing import Any
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -8,7 +9,7 @@ class TurbineDataset(Dataset):
     Args:
         Dataset (_type_): _description_
     """
-    
+
     def __init__(
         self,
         turbineData3d,
@@ -23,10 +24,15 @@ class TurbineDataset(Dataset):
         self.transform = transform
         self.validColId = validColId
 
+        self.items: Any = [None] * len(self.rowIndices)
+
     def __len__(self):
         return len(self.rowIndices)
 
     def __getitem__(self, idx):
+        if self.items[idx] is not None:
+            return self.items[idx]
+
         rowIdx = self.rowIndices[idx]
         item = self.turbineData3d[rowIdx][:, self.featIndices]
 
@@ -46,6 +52,8 @@ class TurbineDataset(Dataset):
 
         maskShape = (1,) + mask.shape
         mask = mask.reshape(maskShape)
+
+        self.items[idx] = (item, mask)
 
         return item, mask
 

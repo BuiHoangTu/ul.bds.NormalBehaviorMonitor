@@ -3,13 +3,20 @@ import torch.nn.functional as F
 
 
 def maskedMseLoss(pred, target, mask):
-    """
-    Compute the masked mean squared error loss.
+    """Compute the masked mean squared error loss.
+
+    Args:
+        "mask" should be of shape (batch_size, channel, time).
+
+        "pred" and "target" should be of shape (batch_size, channel, time, features).
+
+    Returns:
+        float: the mean squared error loss without accounting for masked regions.
     """
 
     mask = mask.unsqueeze(-1).expand_as(pred)
     loss = F.mse_loss(pred * mask, target * mask)
-    
+
     return loss
 
 

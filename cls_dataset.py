@@ -1,4 +1,3 @@
-from typing import Any
 import numpy as np
 from torch.utils.data import Dataset
 
@@ -24,38 +23,44 @@ class TurbineDataset(Dataset):
         self.transform = transform
         self.validColId = validColId
 
-        self.items: Any = [None] * len(self.rowIndices)
+        self.items = self._calcItems()
 
     def __len__(self):
         return len(self.rowIndices)
 
     def __getitem__(self, idx):
-        if self.items[idx] is not None:
-            return self.items[idx]
+        return self.items[idx]
 
-        rowIdx = self.rowIndices[idx]
-        item = self.turbineData3d[rowIdx][:, self.featIndices]
+    def _calcItems(self):
+        items = []
+        for rowIdx in self.rowIndices:
+            item = self.turbineData3d[rowIdx][:, self.featIndices]
 
-        if self.transform:
-            item = self.transform(item)
+            if self.validColId is not None:
+                # 1 for valid, 0 for invalid
+                mask = self.turbineData3d[rowIdx][:, self.validColId]
+                # fill mask.nan with 0
+                mask = np.where(np.isnan(mask), 0, mask)
 
-        if self.validColId is not None:
-            # 1 for valid, 0 for invalid
-            mask = self.turbineData3d[rowIdx][:, self.validColId].float()
-        else:
-            mask = np.ones(item.shape[0])
+                # change to nan for imputation
+                item = np.where(mask == 0, np.nan, item)
+            else:
+                mask = np.ones(item.shape[0])
 
-        # reshape to match the expected input shape of the model
-        # add dimension of channel (1 channel)
-        itemShape = (1,) + item.shape
-        item = item.reshape(itemShape)
+            if self.transform:
+                item = self.transform(item)
 
-        maskShape = (1,) + mask.shape
-        mask = mask.reshape(maskShape)
+            # reshape to match the expected input shape of the model
+            # add dimension of channel (1 channel)
+            itemShape = (1,) + item.shape
+            item = item.reshape(itemShape)
 
-        self.items[idx] = (item, mask)
+            maskShape = (1,) + mask.shape
+            mask = mask.reshape(maskShape)
 
-        return item, mask
+            items.append((item, mask))
+
+        return items
 
 
 def trainTestTurbineDataset(
@@ -64,8 +69,13 @@ def trainTestTurbineDataset(
     testIndices,
     featIndices,
     transform=None,
+    validColId=None,
 ):
-    trainDataset = TurbineDataset(turbineData3d, trainIndices, featIndices, transform)
-    testDataset = TurbineDataset(turbineData3d, testIndices, featIndices, transform)
+    trainDataset = TurbineDataset(
+        turbineData3d, trainIndices, featIndices, transform, validColId
+    )
+    testDataset = TurbineDataset(
+        turbineData3d, testIndices, featIndices, transform, validColId
+    )
 
     return trainDataset, testDataset

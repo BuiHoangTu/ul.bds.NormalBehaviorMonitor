@@ -26,10 +26,26 @@ class TurbineDataset(Dataset):
         self.items = self._calcItems()
 
     def __len__(self):
-        return len(self.rowIndices)
+        return len(self.items)
 
     def __getitem__(self, idx):
         return self.items[idx]
+
+    def save(self, path):
+        items, masks = zip(*self.items)
+        
+        np.save(path + "_items.npy", items)
+        np.save(path + "_masks.npy", masks)
+
+    @staticmethod
+    def load(path):
+        items = np.load(path + "_items.npy")
+        masks = np.load(path + "_masks.npy")
+
+        dset = TurbineDataset([], [], [])
+        dset.items = list(zip(items, masks))
+
+        return dset
 
     def _calcItems(self):
         items = []
@@ -43,7 +59,7 @@ class TurbineDataset(Dataset):
                 mask = np.where(np.isnan(mask), 0, mask)
 
                 # change to nan for imputation
-                item = np.where(mask == 0, np.nan, item)
+                item = np.where(mask[:, None] == 0, np.nan, item)
             else:
                 mask = np.ones(item.shape[0])
 
@@ -72,10 +88,18 @@ def trainTestTurbineDataset(
     validColId=None,
 ):
     trainDataset = TurbineDataset(
-        turbineData3d, trainIndices, featIndices, transform, validColId
+        turbineData3d,
+        trainIndices,
+        featIndices,
+        transform,
+        validColId,
     )
     testDataset = TurbineDataset(
-        turbineData3d, testIndices, featIndices, transform, validColId
+        turbineData3d,
+        testIndices,
+        featIndices,
+        transform,
+        validColId,
     )
 
     return trainDataset, testDataset

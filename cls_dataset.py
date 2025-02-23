@@ -9,21 +9,8 @@ class TurbineDataset(Dataset):
         Dataset (_type_): _description_
     """
 
-    def __init__(
-        self,
-        turbineData3d,
-        rowIndices,
-        featIndices,
-        transform=None,
-        validColId=None,
-    ):
-        self.turbineData3d = turbineData3d
-        self.rowIndices = rowIndices
-        self.featIndices = featIndices
-        self.transform = transform
-        self.validColId = validColId
-
-        self.items = self._calcItems()
+    def __init__(self, items):
+        self.items = items
 
     def __len__(self):
         return len(self.items)
@@ -33,7 +20,7 @@ class TurbineDataset(Dataset):
 
     def save(self, path):
         items, masks = zip(*self.items)
-        
+
         np.save(path + "_items.npy", items)
         np.save(path + "_masks.npy", masks)
 
@@ -42,19 +29,36 @@ class TurbineDataset(Dataset):
         items = np.load(path + "_items.npy")
         masks = np.load(path + "_masks.npy")
 
-        dset = TurbineDataset([], [], [])
-        dset.items = list(zip(items, masks))
+        dset = TurbineDataset(list(zip(items, masks)))
 
         return dset
 
-    def _calcItems(self):
-        items = []
-        for rowIdx in self.rowIndices:
-            item = self.turbineData3d[rowIdx][:, self.featIndices]
+    @staticmethod
+    def fromTurbine3d(
+        turbineData3d,
+        rowIndices,
+        featIndices,
+        transform=None,
+        validColId=None,
+    ):
+        """Create TurbineDataset from turbineData3d
 
-            if self.validColId is not None:
+        Args:
+            turbineData3d (3d numpy array): The whole data
+            indices (list[int]): Indices to use for the dataset
+            featIndices (list[int]): features to use
+            transform (Callable, optional): how to transform the data. Defaults to None.
+            validColId (int, optional): masking feature for invalid data. Defaults to None.
+
+        """
+
+        items = []
+        for rowIdx in rowIndices:
+            item = turbineData3d[rowIdx][:, featIndices]
+
+            if validColId is not None:
                 # 1 for valid, 0 for invalid
-                mask = self.turbineData3d[rowIdx][:, self.validColId]
+                mask = turbineData3d[rowIdx][:, validColId]
                 # fill mask.nan with 0
                 mask = np.where(np.isnan(mask), 0, mask)
 
@@ -63,8 +67,8 @@ class TurbineDataset(Dataset):
             else:
                 mask = np.ones(item.shape[0])
 
-            if self.transform:
-                item = self.transform(item)
+            if transform:
+                item = transform(item)
 
             # reshape to match the expected input shape of the model
             # add dimension of channel (1 channel)
@@ -76,30 +80,44 @@ class TurbineDataset(Dataset):
 
             items.append((item, mask))
 
-        return items
+        return TurbineDataset(items)
 
 
-def trainTestTurbineDataset(
+def toTurbineDatasets(
     turbineData3d,
-    trainIndices,
-    testIndices,
+    indiceses,
     featIndices,
     transform=None,
     validColId=None,
 ):
-    trainDataset = TurbineDataset(
-        turbineData3d,
-        trainIndices,
-        featIndices,
-        transform,
-        validColId,
-    )
-    testDataset = TurbineDataset(
-        turbineData3d,
-        testIndices,
-        featIndices,
-        transform,
-        validColId,
-    )
+    """Quickly create multiple TurbineDataset from a list of indices
 
-    return trainDataset, testDataset
+    Args:
+        turbineData3d (3d numpy array): The whole data
+        indiceses (list[int] or list[list[list[int]]]): Indices to use for each dataset
+        featIndices (list[int]): features to use
+        transform (Callable, optional): how to transform the data. Defaults to None.
+        validColId (int, optional): masking feature for invalid data. Defaults to None.
+
+    Returns:
+        tuple[TurbineDataset]: _description_
+    """
+
+    # check if indiceses is a list of indices or a list of list of indices
+    if isinstance(indiceses[0], int):
+        indiceses = [indiceses]
+
+    datasets = []
+    for indices in indiceses:
+        assert isinstance(indices, list)
+
+        dataset = TurbineDataset.fromTurbine3d(
+            turbineData3d,
+            indices,
+            featIndices,
+            transform,
+            validColId,
+        )
+        datasets.append(dataset)
+
+    return tuple(datasets)

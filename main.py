@@ -3,7 +3,7 @@ from sklearn.discriminant_analysis import StandardScaler
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from cls_dataset import trainTestTurbineDataset
+from cls_dataset import toTurbineDatasets
 from masking import MaskedConv2d, maskedMseLoss
 from prepare_data import TurbineData, listTurbines
 
@@ -47,10 +47,9 @@ def main():
 
     stdScaler.fit(scalerTrainData)
 
-    trainSet, testSet = trainTestTurbineDataset(
+    trainSet, testSet = toTurbineDatasets(
         turbineData.data3d,
-        trainIndices,
-        testIndices,
+        (trainIndices, testIndices),
         targetFeatIndices,
         stdScaler.transform,
     )

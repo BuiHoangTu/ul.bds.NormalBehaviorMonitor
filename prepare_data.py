@@ -57,16 +57,19 @@ def getStackedTurbineData(
     name: str,
     n_days=5,
     shift=1,
+    sampleLen_s=10 * 60,  # default to 10 minutes
     recompute=False,
+    verbose=False,
 ) -> tuple[h5py.Dataset, h5py.File]:
 
-    dataFile = Path("tmp") / f"dataset_{name}_{n_days}_{shift}.hdf5"
+    ## >>> read cached data
+    dataFile = Path("tmp") / f"dataset_{name}_{n_days}_{shift}_{sampleLen_s}.hdf5"
     if recompute:
         if dataFile.exists():
             dataFile.unlink()
 
     if dataFile.exists():
-        f = h5py.File(dataFile, "r+")
+        f = h5py.File(dataFile, "r", swmr=True)
         if name in f:
             dset = f[name]
             if isinstance(dset, h5py.Dataset):
@@ -75,38 +78,56 @@ def getStackedTurbineData(
                 raise KeyError(f"Dataset {name} exists but is not a h5py.Dataset")
         else:
             f.close()
+    ## <<< read cached data
 
     dfData = readTurbine(name)
 
-    # fill missing index
-    dfData = dfData.set_index("datetime")
-    fullDateTimeRange = pd.date_range(
-        start=dfData.index.min(), end=dfData.index.max(), freq="10min"
+    if verbose:
+        originalLen = len(dfData)
+        originalNans = dfData.isna().sum().to_dict()
+
+    # resample data
+    dfData.set_index("datetime", inplace=True)
+    dfData.drop(
+        columns=[
+            col
+            for col in REMOVED_COLUMNS
+            if (col in dfData.columns) and (col != "datetime")
+        ],
+        inplace=True,
     )
-    dfFilled = dfData.reindex(fullDateTimeRange)
-    dfFilled = dfFilled.reset_index()
-    dfFilled = dfFilled.rename(columns={"index": "datetime"})
+    dfFilled = dfData.resample(f"{sampleLen_s}s").mean()
+
+    dfFilled.reset_index(inplace=True)
+    dfFilled.rename(columns={"index": "datetime"}, inplace=True)
+
+    if verbose:
+        n_nan = dfFilled.isna().sum().to_dict()
+
+        print(f"Length of data: {len(dfFilled)} / {originalLen}")
+
+        for col in n_nan:
+            print(f"\n{col}: {n_nan[col]} / {originalNans[col]}")
 
     # stack data
-    N_ROWS_PER_DAY = int(24 * 60 / 10)  # 10 minutes per row
+    N_ROWS_PER_DAY = int(24 * 60 * 60 / sampleLen_s)  # 24h in seconds / sampleLen_s
 
     timeSteps = n_days * N_ROWS_PER_DAY
 
-    dfReduced = dfFilled.drop(columns=REMOVED_COLUMNS)
+    dfFilled = dfFilled.drop(columns=["datetime"])
+    arrayFilled = dfFilled.to_numpy()
+    arrayFilled = arrayFilled.astype(np.float32)
 
-    arrayReduced = dfReduced.to_numpy()
-    arrayReduced = arrayReduced.astype(np.float32)
-
-    n_stack = (len(arrayReduced) - timeSteps) // shift
+    n_stack = (len(arrayFilled) - timeSteps) // shift
 
     f = h5py.File(dataFile, "a")
     dset = f.create_dataset(
         name,
-        (n_stack, timeSteps, arrayReduced.shape[1]),
+        (n_stack, timeSteps, arrayFilled.shape[1]),
         dtype=np.float32,
     )
     for i in range(n_stack):
-        dset[i] = arrayReduced[i * shift : i * shift + timeSteps]
+        dset[i] = arrayFilled[i * shift : i * shift + timeSteps]
 
     return dset, f
 
@@ -155,7 +176,9 @@ class TurbineData:
         nInvalid = 0
 
         for timeStep in turbineData2d:
-            if timeStep[self.idUnderperformValid] == 0:
+            if (timeStep[self.idUnderperformValid] == 0) or (
+                timeStep[self.idUnderperformValid] == np.nan
+            ):
                 nContinuousInvalid += 1
                 nInvalid += 1
 
@@ -166,6 +189,13 @@ class TurbineData:
 
             else:
                 nContinuousInvalid = 0
+
+        # check if last value is valid
+        if (timeStep[self.idUnderperformValid] == 0) or (
+            timeStep[self.idUnderperformValid] == np.nan
+        ):
+            return False
+
         return True
 
     def _evalUnderperformProba(
@@ -182,7 +212,9 @@ class TurbineData:
         nUnderperform = 0
 
         for timeStep in turbineData2d:
-            if timeStep[self.idUnderperformProba] > underperformThreshold:
+            if (timeStep[self.idUnderperformProba] > underperformThreshold) or (
+                timeStep[self.idUnderperformProba] == np.nan
+            ):
                 nContinuousUnderperform += 1
                 nUnderperform += 1
 
@@ -242,7 +274,9 @@ class TurbineData:
             TurbineData.USING_TURBINES.remove(self.turbineName)
         except KeyError:
             if self.verbose:
-                print(f"Warning: Data tracking is broken, {self.turbineName} is not tracked when closing")
+                print(
+                    f"Warning: Data tracking is broken, {self.turbineName} is not tracked when closing"
+                )
 
     def __del__(self):
         self.close()
@@ -251,6 +285,6 @@ class TurbineData:
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")
-        dset, f = getStackedTurbineData(turbine, recompute=True)
+        dset, f = getStackedTurbineData(turbine, recompute=True, verbose=True)
         print(dset.shape)
         f.close()

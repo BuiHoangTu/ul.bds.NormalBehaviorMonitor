@@ -89,12 +89,12 @@ def toTurbineDatasets(
     featIndices,
     transform=None,
     validColId=None,
-):
+) -> tuple[TurbineDataset, ...]:
     """Quickly create multiple TurbineDataset from a list of indices
 
     Args:
         turbineData3d (3d numpy array): The whole data
-        indiceses (list[int] or list[list[list[int]]]): Indices to use for each dataset
+        indiceses (list[int] or list[list[int]]): Indices to use for each dataset
         featIndices (list[int]): features to use
         transform (Callable, optional): how to transform the data. Defaults to None.
         validColId (int, optional): masking feature for invalid data. Defaults to None.
@@ -109,8 +109,6 @@ def toTurbineDatasets(
 
     datasets = []
     for indices in indiceses:
-        assert isinstance(indices, list)
-
         dataset = TurbineDataset.fromTurbine3d(
             turbineData3d,
             indices,

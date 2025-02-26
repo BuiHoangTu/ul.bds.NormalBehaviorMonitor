@@ -1,14 +1,16 @@
+# Byte-compiled / optimized / DLL files
 env.*
 __pycache__/
 
 Wind-Turbine-SCADA-signals-2017_0.csv
 Wind-Turbine-SCADA-signals.csv
 
-
+# temporary storage
 /tmp/**
 
-/dev.py
+# temporary testing files
+test.py
+test.ipynb
 
-test.*
-
+# logs
 *.log*

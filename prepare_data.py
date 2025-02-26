@@ -168,8 +168,8 @@ def getStackedTurbineData(
 
 class TurbineData:
     USING_TURBINES = set()
-    COL_UNDERPERFORMANCE_PROBA = "underperformanceprobability"
-    COL_UNDERPERFORMANCE_PROBA_VALID = "underperformanceprobabilityvalid"
+    COL_UNDERPERF_PROBA = "underperformanceprobability"
+    COL_UNDERPERF_VALID = "underperformanceprobabilityvalid"
 
     def __init__(self, turbineName: str, verbose=False):
         self.turbineName = turbineName
@@ -182,10 +182,9 @@ class TurbineData:
 
         self.columns, self.data3d, self.f = getStackedTurbineData(turbineName)
 
-        self.idUnderperformProba = self.getIdOfColumn(self.COL_UNDERPERFORMANCE_PROBA)
-        self.idUnderperformValid = self.getIdOfColumn(
-            self.COL_UNDERPERFORMANCE_PROBA_VALID
-        )
+        self._idUnderperfProba = self.getIdOfColumn(self.COL_UNDERPERF_PROBA)
+        self._idUnderperfValid = self.getIdOfColumn(self.COL_UNDERPERF_VALID)
+        self._idOrgNFeat = self.getIdOfColumn(ORG_FEAT_COUNT)
 
     def getIdOfColumn(self, columnName: str) -> int:
         """
@@ -209,8 +208,10 @@ class TurbineData:
         nInvalid = 0
 
         for timeStep in turbineData2d:
-            if (timeStep[self.idUnderperformValid] == 0) or (
-                timeStep[self.idUnderperformValid] == np.nan
+            if (
+                (timeStep[self._idUnderperfValid] == 0)
+                or (timeStep[self._idUnderperfValid] == np.nan)
+                or (timeStep[self._idOrgNFeat] == 0)
             ):
                 nContinuousInvalid += 1
                 nInvalid += 1
@@ -224,8 +225,10 @@ class TurbineData:
                 nContinuousInvalid = 0
 
         # check if last value is valid
-        if (timeStep[self.idUnderperformValid] == 0) or (
-            timeStep[self.idUnderperformValid] == np.nan
+        if (
+            (timeStep[self._idUnderperfValid] == 0)
+            or (timeStep[self._idUnderperfValid] == np.nan)
+            or (timeStep[self._idOrgNFeat] == 0)
         ):
             return False
 
@@ -245,8 +248,10 @@ class TurbineData:
         nUnderperform = 0
 
         for timeStep in turbineData2d:
-            if (timeStep[self.idUnderperformProba] > underperformThreshold) or (
-                timeStep[self.idUnderperformProba] == np.nan
+            if (
+                (timeStep[self._idUnderperfProba] > underperformThreshold)
+                or (timeStep[self._idUnderperfProba] == np.nan)
+                or (timeStep[self._idOrgNFeat] == 0)
             ):
                 nContinuousUnderperform += 1
                 nUnderperform += 1

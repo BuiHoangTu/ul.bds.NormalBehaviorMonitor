@@ -19,19 +19,12 @@ class TurbineDataset(Dataset):
         return self.items[idx]
 
     def save(self, path):
-        items, masks = zip(*self.items)
-
-        np.save(path + "_items.npy", items)
-        np.save(path + "_masks.npy", masks)
+        np.save(path + "_items.npy", self.items)
 
     @staticmethod
     def load(path):
         items = np.load(path + "_items.npy")
-        masks = np.load(path + "_masks.npy")
-
-        dset = TurbineDataset(list(zip(items, masks)))
-
-        return dset
+        return TurbineDataset(items)
 
     @staticmethod
     def fromTurbine3d(
@@ -39,7 +32,6 @@ class TurbineDataset(Dataset):
         rowIndices,
         featIndices,
         transform=None,
-        validColId=None,
     ):
         """Create TurbineDataset from turbineData3d
 
@@ -56,17 +48,6 @@ class TurbineDataset(Dataset):
         for rowIdx in rowIndices:
             item = turbineData3d[rowIdx][:, featIndices]
 
-            if validColId is not None:
-                # 1 for valid, 0 for invalid
-                mask = turbineData3d[rowIdx][:, validColId]
-                # fill mask.nan with 0
-                mask = np.where(np.isnan(mask), 0, mask)
-
-                # change to nan for imputation
-                item = np.where(mask[:, None] == 0, np.nan, item)
-            else:
-                mask = np.ones(item.shape[0])
-
             if transform:
                 item = transform(item)
 
@@ -75,10 +56,7 @@ class TurbineDataset(Dataset):
             itemShape = (1,) + item.shape
             item = item.reshape(itemShape)
 
-            maskShape = (1,) + mask.shape
-            mask = mask.reshape(maskShape)
-
-            items.append((item, mask))
+            items.append(item)
 
         return TurbineDataset(items)
 
@@ -88,7 +66,6 @@ def toTurbineDatasets(
     indiceses,
     featIndices,
     transform=None,
-    validColId=None,
 ) -> tuple[TurbineDataset, ...]:
     """Quickly create multiple TurbineDataset from a list of indices
 
@@ -114,7 +91,6 @@ def toTurbineDatasets(
             indices,
             featIndices,
             transform,
-            validColId,
         )
         datasets.append(dataset)
 

@@ -9,14 +9,21 @@ import pandas as pd
 from data import parquet
 
 
-REMOVED_COLUMNS = [  # columns that are for sure not needed
+_REMOVED_COLS = [  # columns that are for sure not needed
     "turbineid",
-    "datetime",
     "site",
     "phase",
     "manufacturer",
     "model",
 ]
+
+_FLAG_COLS = [
+    "turbulentvalid",
+    "underperformanceprobabilityvalid",
+    "overperformanceprobabilityvalid",
+]
+
+ORG_FEAT_COUNT = "original_feature_count"
 
 
 @cache
@@ -48,11 +55,6 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
     return dfTurbine
 
 
-@cache
-def getColumns():
-    return readTurbine().columns.difference(REMOVED_COLUMNS, False)
-
-
 def getStackedTurbineData(
     name: str,
     n_days=5,
@@ -60,7 +62,9 @@ def getStackedTurbineData(
     sampleLen_s=10 * 60,  # default to 10 minutes
     recompute=False,
     verbose=False,
-) -> tuple[h5py.Dataset, h5py.File]:
+) -> tuple[pd.Index, h5py.Dataset, h5py.File]:
+    DSET_ID = "data3d"
+    COLS_ID = "columns"
 
     ## >>> read cached data
     dataFile = Path("tmp") / f"dataset_{name}_{n_days}_{shift}_{sampleLen_s}.hdf5"
@@ -70,17 +74,26 @@ def getStackedTurbineData(
 
     if dataFile.exists():
         f = h5py.File(dataFile, "r", swmr=True)
-        if name in f:
-            dset = f[name]
-            if isinstance(dset, h5py.Dataset):
-                return dset, f
+        if DSET_ID in f and COLS_ID in f:
+            colStore = f[COLS_ID]
+            if isinstance(colStore, h5py.Dataset):
+                cols = pd.Index(colStore.asstr()[()])
             else:
-                raise KeyError(f"Dataset {name} exists but is not a h5py.Dataset")
+                raise KeyError(
+                    f"Columns' storage ``{name}`` exists but is not a h5py.Dataset"
+                )
+
+            dset = f[DSET_ID]
+            if isinstance(dset, h5py.Dataset):
+                return cols, dset, f
+            else:
+                raise KeyError(f"Dataset ``{name}`` exists but is not a h5py.Dataset")
         else:
             f.close()
     ## <<< read cached data
 
     dfData = readTurbine(name)
+    dfData["turbulent"] = dfData["turbulent"].astype(float)
 
     if verbose:
         originalLen = len(dfData)
@@ -89,14 +102,20 @@ def getStackedTurbineData(
     # resample data
     dfData.set_index("datetime", inplace=True)
     dfData.drop(
-        columns=[
-            col
-            for col in REMOVED_COLUMNS
-            if (col in dfData.columns) and (col != "datetime")
-        ],
+        columns=[col for col in _REMOVED_COLS if (col in dfData.columns)],
         inplace=True,
     )
     dfFilled = dfData.resample(f"{sampleLen_s}s").mean()
+
+    # mark empty rows
+    dfFilled[ORG_FEAT_COUNT] = dfFilled.notna().astype(int).sum(axis=1)
+
+    # empty out invalid data, leave flags
+    VALID_COL = "underperformanceprobabilityvalid"
+    emptyingCols = dfFilled.columns.difference(_FLAG_COLS).difference([ORG_FEAT_COUNT])
+    dfFilled.loc[dfFilled[VALID_COL] == 0, emptyingCols] = np.nan
+
+    dfFilled.interpolate(method="time", inplace=True)
 
     dfFilled.reset_index(inplace=True)
     dfFilled.rename(columns={"index": "datetime"}, inplace=True)
@@ -105,16 +124,21 @@ def getStackedTurbineData(
         n_nan = dfFilled.isna().sum().to_dict()
 
         print(f"Length of data: {len(dfFilled)} / {originalLen}")
+        print("Nans in features:")
+        for col in n_nan.keys() & originalNans.keys():
+            print(f"\t{col}: {n_nan[col]} / {originalNans[col]}")
 
-        for col in n_nan:
-            print(f"\n{col}: {n_nan[col]} / {originalNans[col]}")
+        print("=" * 50)
 
     # stack data
     N_ROWS_PER_DAY = int(24 * 60 * 60 / sampleLen_s)  # 24h in seconds / sampleLen_s
 
     timeSteps = n_days * N_ROWS_PER_DAY
 
-    dfFilled = dfFilled.drop(columns=["datetime"])
+    # convert date to numpy float
+    dfFilled["datetime"] = (
+        dfFilled["datetime"].astype(np.int64) // 10**9  # nanoseconds to seconds
+    )
     arrayFilled = dfFilled.to_numpy()
     arrayFilled = arrayFilled.astype(np.float32)
 
@@ -122,14 +146,24 @@ def getStackedTurbineData(
 
     f = h5py.File(dataFile, "a")
     dset = f.create_dataset(
-        name,
+        DSET_ID,
         (n_stack, timeSteps, arrayFilled.shape[1]),
         dtype=np.float32,
     )
-    for i in range(n_stack):
-        dset[i] = arrayFilled[i * shift : i * shift + timeSteps]
 
-    return dset, f
+    ID_OF_VALID_COL = dfFilled.columns.get_loc(VALID_COL)
+    ID_OF_N_FEAT = dfFilled.columns.get_loc(ORG_FEAT_COUNT)
+
+    for i in range(n_stack):
+        sample = arrayFilled[i * shift : i * shift + timeSteps]
+
+        # check if sample has at least one valid value
+        if sample[:, ID_OF_N_FEAT].sum() > 0 and sample[:, ID_OF_VALID_COL].sum() > 0:
+            dset[i] = sample
+
+    f.create_dataset(COLS_ID, data=dfFilled.columns.to_numpy(dtype="S"))
+
+    return dfFilled.columns, dset, f
 
 
 class TurbineData:
@@ -146,8 +180,7 @@ class TurbineData:
                 print(f"Warning: {turbineName} is already in use")
         TurbineData.USING_TURBINES.add(turbineName)
 
-        self.data3d, self.f = getStackedTurbineData(turbineName)
-        self.columns = getColumns()
+        self.columns, self.data3d, self.f = getStackedTurbineData(turbineName)
 
         self.idUnderperformProba = self.getIdOfColumn(self.COL_UNDERPERFORMANCE_PROBA)
         self.idUnderperformValid = self.getIdOfColumn(
@@ -285,6 +318,6 @@ class TurbineData:
 if __name__ == "__main__":
     for turbine in listTurbines():
         print(f"Reading {turbine}")
-        dset, f = getStackedTurbineData(turbine, recompute=True, verbose=True)
+        _, dset, f = getStackedTurbineData(turbine, recompute=True, verbose=True)
         print(dset.shape)
         f.close()

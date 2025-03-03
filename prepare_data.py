@@ -25,6 +25,11 @@ _FLAG_COLS = [
 
 ORG_FEAT_COUNT = "original_feature_count"
 
+# default values for getStackedTurbineData
+DEF_N_DAYS = 2
+DEF_SHIFT = 1
+DEF_SAMPLE_LEN_S = 30 * 60  # default to 30 minutes -> 3 rows per sample
+
 
 @cache
 def listTurbines() -> list[str]:
@@ -57,9 +62,9 @@ def readTurbine(name: Optional[str] = None) -> pd.DataFrame:
 
 def getStackedTurbineData(
     name: str,
-    n_days=5,
-    shift=1,
-    sampleLen_s=10 * 60,  # default to 10 minutes
+    n_days=DEF_N_DAYS,
+    shift=DEF_SHIFT,
+    sampleLen_s=DEF_SAMPLE_LEN_S,
     recompute=False,
     verbose=False,
 ) -> tuple[pd.Index, h5py.Dataset, h5py.File]:
@@ -171,7 +176,14 @@ class TurbineData:
     COL_UNDERPERF_PROBA = "underperformanceprobability"
     COL_UNDERPERF_VALID = "underperformanceprobabilityvalid"
 
-    def __init__(self, turbineName: str, verbose=False):
+    def __init__(
+        self,
+        turbineName: str,
+        n_days=DEF_N_DAYS,
+        shift=DEF_SHIFT,
+        sampleLen_s=DEF_SAMPLE_LEN_S,
+        verbose=False,
+    ):
         self.turbineName = turbineName
         self.verbose = verbose
 
@@ -180,7 +192,9 @@ class TurbineData:
                 print(f"Warning: {turbineName} is already in use")
         TurbineData.USING_TURBINES.add(turbineName)
 
-        self.columns, self.data3d, self.f = getStackedTurbineData(turbineName)
+        self.columns, self.data3d, self.f = getStackedTurbineData(
+            turbineName, n_days, shift, sampleLen_s, verbose=verbose
+        )
 
         self._idUnderperfProba = self.getIdOfColumn(self.COL_UNDERPERF_PROBA)
         self._idUnderperfValid = self.getIdOfColumn(self.COL_UNDERPERF_VALID)

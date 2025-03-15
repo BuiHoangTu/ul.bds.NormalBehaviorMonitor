@@ -1,5 +1,8 @@
+from typing import Iterable, Union
 import numpy as np
 from torch.utils.data import Dataset
+
+from prepare_data import TurbineData
 
 
 class TurbineDataset(Dataset):
@@ -27,34 +30,39 @@ class TurbineDataset(Dataset):
         return TurbineDataset(items)
 
     @staticmethod
-    def fromTurbine3d(
-        turbineData3d,
-        rowIndices,
-        featIndices,
+    def fromTurbineData(
+        turbineData: TurbineData,
+        rowIndices: list[int],
+        featNames: list[str],
         transform=None,
+        immuteFeats: list[str] = [],
     ):
         """Create TurbineDataset from turbineData3d
 
         Args:
-            turbineData3d (3d numpy array): The whole data
-            indices (list[int]): Indices to use for the dataset
-            featIndices (list[int]): features to use
+            turbineData (TurbineData): The whole data
+            rowIndices (list[int]): Indices to use for the dataset
+            featNames (list[str]): features to use
             transform (Callable, optional): how to transform the data. Defaults to None.
-            validColId (int, optional): masking feature for invalid data. Defaults to None.
+            immuteFeats (list[str], optional): features that should not be transformed. Defaults to [].
 
         """
 
+        featIndices = [turbineData.getIdOfColumn(featName) for featName in featNames]
+        immuteIndices = [
+            turbineData.getIdOfColumn(featName) for featName in immuteFeats
+        ]
+        data3d = turbineData.data3d
+
         items = []
         for rowIdx in rowIndices:
-            item = turbineData3d[rowIdx][:, featIndices]
+            itemFeat = data3d[rowIdx][:, featIndices]
+            itemImmuteFeat = data3d[rowIdx][:, immuteIndices]
 
             if transform:
-                item = transform(item)
+                itemFeat = transform(itemFeat)
 
-            # reshape to match the expected input shape of the model
-            # add dimension of channel (1 channel)
-            itemShape = (1,) + item.shape
-            item = item.reshape(itemShape)
+            item = np.concatenate((itemFeat, itemImmuteFeat), axis=1)
 
             items.append(item)
 
@@ -62,35 +70,38 @@ class TurbineDataset(Dataset):
 
 
 def toTurbineDatasets(
-    turbineData3d,
-    indiceses,
-    featIndices,
+    turbineData: TurbineData,
+    indiceses: Union[list[int], Iterable[list[int]]],
+    featNames: list[str],
     transform=None,
+    immuteFeats: list[str] = [],
 ) -> tuple[TurbineDataset, ...]:
     """Quickly create multiple TurbineDataset from a list of indices
 
     Args:
-        turbineData3d (3d numpy array): The whole data
+        turbineData (TurbineData): The whole data
         indiceses (list[int] or list[list[int]]): Indices to use for each dataset
-        featIndices (list[int]): features to use
+        featNames (list[str]): features to use
         transform (Callable, optional): how to transform the data. Defaults to None.
-        validColId (int, optional): masking feature for invalid data. Defaults to None.
+        immuteFeats (list[str], optional): features that should not be transformed. Defaults to [].
 
-    Returns:
-        tuple[TurbineDataset]: _description_
+        Returns:
+            tuple[TurbineDataset]: _description_
     """
 
     # check if indiceses is a list of indices or a list of list of indices
-    if isinstance(indiceses[0], int):
-        indiceses = [indiceses]
+    indicesList = list(indiceses)
+    if isinstance(indicesList[0], int):
+        indicesList = [indicesList]
 
     datasets = []
-    for indices in indiceses:
-        dataset = TurbineDataset.fromTurbine3d(
-            turbineData3d,
-            indices,
-            featIndices,
+    for indices in indicesList:
+        dataset = TurbineDataset.fromTurbineData(
+            turbineData,
+            indices,  # type: ignore # intellisense bug
+            featNames,
             transform,
+            immuteFeats,
         )
         datasets.append(dataset)
 

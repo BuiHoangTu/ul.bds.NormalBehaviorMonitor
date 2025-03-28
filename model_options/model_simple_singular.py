@@ -49,10 +49,10 @@ class SimpleDecoder(nn.Module):
         ## Trainable layers
         self.hiddenLatents = nn.Sequential()
         # make sure the output can be sent to the deconv layers
-        deconvInput = (reconstructDim-4) * 64
+        deconvInput = (reconstructDim) * 64
         self.fc = nn.LazyLinear(deconvInput)
-        self.deconv1 = nn.ConvTranspose1d(64, 32, kernel_size=3)
-        self.deconv2 = nn.ConvTranspose1d(32, 1, kernel_size=3)
+        self.deconv1 = nn.ConvTranspose1d(64, 32, kernel_size=3, padding=1)
+        self.deconv2 = nn.ConvTranspose1d(32, 1, kernel_size=3, padding=1)
 
         ## hidden latents
         for i in range(n_hiddenLatent):

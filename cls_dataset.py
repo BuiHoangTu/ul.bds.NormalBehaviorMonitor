@@ -2,6 +2,7 @@ from typing import Iterable, Union
 import numpy as np
 from torch.utils.data import Dataset
 
+from cls_indexer import Indexer
 from prepare_data import TurbineData
 
 
@@ -66,7 +67,9 @@ class TurbineDataset(Dataset):
 
             items.append(item)
 
-        return TurbineDataset(items)
+        indexer = Indexer(featNames, immuteFeats)
+
+        return indexer, TurbineDataset(items)
 
 
 def toTurbineDatasets(
@@ -75,7 +78,7 @@ def toTurbineDatasets(
     featNames: list[str],
     transform=None,
     immuteFeats: list[str] = [],
-) -> tuple[TurbineDataset, ...]:
+) -> tuple[Indexer, tuple[TurbineDataset, ...]]:
     """Quickly create multiple TurbineDataset from a list of indices
 
     Args:
@@ -96,7 +99,7 @@ def toTurbineDatasets(
 
     datasets = []
     for indices in indicesList:
-        dataset = TurbineDataset.fromTurbineData(
+        indexer, dataset = TurbineDataset.fromTurbineData(
             turbineData,
             indices,  # type: ignore # intellisense bug
             featNames,
@@ -105,4 +108,4 @@ def toTurbineDatasets(
         )
         datasets.append(dataset)
 
-    return tuple(datasets)
+    return indexer, tuple(datasets)

@@ -5,7 +5,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from support_classes.cls_dataset import toTurbineDatasets
-from model_options.model_simple_singular import SimpleDecoder, SimpleEncoder
+from model_options.model_simple_singular import Autoencoder
 from prepare_data import TurbineData, listTurbines
 from torchsummary import summary
 
@@ -87,21 +87,6 @@ def main():
     inputShape = first_batch[0].size()
     print(f"Data shape: {inputShape}")
     
-    class Autoencoder(nn.Module):
-        def __init__(self, sampleShape, latent_dim: int):
-            super().__init__()
-            
-            n_feat, n_time = sampleShape
-            
-            self.encoder = SimpleEncoder(n_feat, latent_dim)
-            self.decoder = SimpleDecoder(sampleShape)
-
-        def forward(self, x):
-            latent = self.encoder(x)
-            reconstructed = self.decoder(latent)
-            return reconstructed
-
-
     # test if the model is working
     testModel = Autoencoder(inputShape, inputShape[0] * inputShape[1] // COMPRESSION)
 

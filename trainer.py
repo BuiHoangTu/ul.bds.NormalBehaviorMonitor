@@ -1,20 +1,10 @@
+from typing import Any, Callable
 import torch
+from torch.nn import Module
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
-def _default(batch, model):
-    if len(batch) == 2:
-        batchX, batchY = batch
-        batchXs = [batchX]
-    else:
-        *batchXs, batchY = batch
-
-    outputs = model(*batchXs)
-
-    return outputs, batchY
-
-
-def infer(model, device, testLoader, batchToInfer=_default):
+def infer(model, device, testLoader, inferBatch):
     model.to(device)
 
     model.eval()
@@ -24,11 +14,14 @@ def infer(model, device, testLoader, batchToInfer=_default):
 
     with torch.no_grad():
         for batch in testLoader:
-            batch = [b.to(device) for b in batch]
-            outputs, batchY = batchToInfer(batch, model)
+            try:
+                batch = batch.to(device)
+            except AttributeError:
+                batch = [b.to(device) for b in batch]
 
-            probas = torch.sigmoid(outputs)
-            predProbas.append(probas)
+            outputs, batchY = inferBatch(batch, model)
+
+            predProbas.append(outputs)
             actuals.append(batchY)
 
     return torch.cat(predProbas), torch.cat(actuals)
@@ -41,10 +34,28 @@ def train(
     valLoader,
     criterion,
     optimizer,
-    epochs=100,
-    earlyStopping=10,
-    batchToInfer=_default,
+    epochs,
+    earlyStopping,
+    inferBatch: Callable[[Any, Module], Any],
 ):
+    """
+    Train the model with early stopping and learning rate scheduling.
+    Args:
+        model: The model to train.
+        device: The device to use for training (CPU or GPU).
+        trainLoader: DataLoader for the training data.
+        valLoader: DataLoader for the validation data.
+        criterion: Loss function.
+        optimizer: Optimizer.
+        epochs: Number of epochs to train for.
+        earlyStopping: Number of epochs with no improvement after which training will be stopped.
+        batchToInfer: Function to process the batch before inference. It should take a batch and the model as input and return the model outputs and the target values.
+    Returns:
+        model: The trained model.
+        trainLosses: List of training losses.
+        valLosses: List of validation losses.
+    """
+
     model.to(device)
 
     optimScheduler = ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=4)
@@ -62,8 +73,12 @@ def train(
         trainLoss = 0
 
         for batch in trainLoader:
-            batch = [b.to(device) for b in batch]
-            outputs, batchY = batchToInfer(batch, model)
+            try:
+                batch = batch.to(device)
+            except AttributeError:
+                batch = [b.to(device) for b in batch]
+
+            outputs, batchY = inferBatch(batch, model)
             loss = criterion(outputs, batchY)
 
             optimizer.zero_grad()
@@ -76,7 +91,7 @@ def train(
         trainLosses.append(trainLoss)
 
         # validation
-        valPred, valActual = infer(model, device, valLoader, batchToInfer)
+        valPred, valActual = infer(model, device, valLoader, inferBatch)
         valLoss = criterion(valPred, valActual)
         valLosses.append(valLoss.item())
 

@@ -8,6 +8,7 @@ __pycache__/
 
 # temporary storage
 /tmp/**
+/output/
 
 # temporary testing files
 test.py

@@ -1,9 +1,25 @@
 import torch.nn as nn
 
 
+class Autoencoder(nn.Module):
+    def __init__(self, sampleShape, latent_dim: int):
+        super().__init__()
+
+        n_feat, _ = sampleShape
+
+        self.encoder = SimpleEncoder(n_feat, latent_dim)
+        self.decoder = SimpleDecoder(sampleShape)
+
+    def forward(self, x):
+        latent = self.encoder(x)
+        reconstructed = self.decoder(latent)
+        return reconstructed
+
+
 class SimpleEncoder(nn.Module):
     def __init__(
         self,
+        n_feature,
         latentDim: int,
         n_hiddenLatent=0,
         hiddenLatentReducingFactor=0.7,
@@ -13,17 +29,19 @@ class SimpleEncoder(nn.Module):
         self.n_hiddenLatent = n_hiddenLatent
         self.hiddenLatentReducingFactor = hiddenLatentReducingFactor
 
-        ## Trainable layers
-        self.conv1 = nn.Conv1d(1, 32, kernel_size=3)
+        self.conv1 = nn.Conv1d(n_feature, 32, kernel_size=3)
         self.conv2 = nn.Conv1d(32, 64, kernel_size=3)
         self.hiddenLatents = nn.Sequential()
         self.fc = nn.LazyLinear(latentDim)
 
         ## hidden latents
+        currDim = int(latentDim / (hiddenLatentReducingFactor**n_hiddenLatent))
         for i in range(n_hiddenLatent):
-            dim = int(latentDim / (hiddenLatentReducingFactor ** (n_hiddenLatent - i)))
-            self.hiddenLatents.add_module(f"fc{i}", nn.LazyLinear(dim))
+            self.hiddenLatents.add_module(f"fc{i}", nn.LazyLinear(currDim))
             self.hiddenLatents.add_module(f"relu{i}", nn.ReLU())
+            currDim = int(currDim * hiddenLatentReducingFactor)
+        self.hiddenLatents.add_module("fc_fin", nn.LazyLinear(currDim))
+        self.hiddenLatents.add_module("relu_fin", nn.ReLU())
 
     def forward(self, x):
         x = self.conv1(x)
@@ -37,28 +55,31 @@ class SimpleEncoder(nn.Module):
 class SimpleDecoder(nn.Module):
     def __init__(
         self,
-        reconstructDim: int,
+        reconstrShape,
         n_hiddenLatent=0,
         hiddenLatentReducingFactor=0.7,
     ):
         super(SimpleDecoder, self).__init__()
-        self.reconstructDim = reconstructDim
+        self.n_reconstrFeat, self.reconstrDim = reconstrShape
         self.n_hiddenLatent = n_hiddenLatent
         self.hiddenLatentReducingFactor = hiddenLatentReducingFactor
+        deconvInput = (self.reconstrDim) * 64
 
-        ## Trainable layers
         self.hiddenLatents = nn.Sequential()
-        # make sure the output can be sent to the deconv layers
-        deconvInput = (reconstructDim) * 64
         self.fc = nn.LazyLinear(deconvInput)
         self.deconv1 = nn.ConvTranspose1d(64, 32, kernel_size=3, padding=1)
-        self.deconv2 = nn.ConvTranspose1d(32, 1, kernel_size=3, padding=1)
+        self.deconv2 = nn.ConvTranspose1d(
+            32, self.n_reconstrFeat, kernel_size=3, padding=1
+        )
 
         ## hidden latents
+        currDim = int(self.reconstrDim * (hiddenLatentReducingFactor**n_hiddenLatent))
         for i in range(n_hiddenLatent):
-            dim = int(reconstructDim * (hiddenLatentReducingFactor ** (n_hiddenLatent - i)))
-            self.hiddenLatents.add_module(f"fc{i}", nn.LazyLinear(dim))
+            self.hiddenLatents.add_module(f"fc{i}", nn.LazyLinear(currDim))
             self.hiddenLatents.add_module(f"relu{i}", nn.ReLU())
+            currDim = int(currDim / hiddenLatentReducingFactor)
+        self.hiddenLatents.add_module("fc_fin", nn.LazyLinear(currDim))
+        self.hiddenLatents.add_module("relu_fin", nn.ReLU())
 
     def forward(self, x):
         x = self.hiddenLatents(x)

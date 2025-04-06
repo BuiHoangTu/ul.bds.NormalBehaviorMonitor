@@ -1,197 +1,107 @@
+import random
 import numpy as np
 from sklearn.discriminant_analysis import StandardScaler
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from cls_dataset import toTurbineDatasets
-from masking import MaskedConv2d, maskedMseLoss
+from support_classes.cls_dataset import toTurbineDatasets
+from model_options.model_simple_singular import Autoencoder
 from prepare_data import TurbineData, listTurbines
+from torchsummary import summary
 
 
+RANDOM_SEED = 17
 TEST_RATIO = 0.2
-SEED = 17
-np.random.seed(SEED)
+VAL_RATIO = 0.2
+COMPRESSION = 2
 
 
 def main():
     turbines = listTurbines()
     print(f"Turbines: {turbines}")
 
-    turbineData = TurbineData(turbines[0], verbose=True)
-    print(f"Data shape: {turbineData.data3d.shape}")
+    turbineData = TurbineData(turbines[1], verbose=False)
+    print("Data shape and columns:")
+    print(turbineData.data3d.shape)
+    print(turbineData.columns)
+    print("=" * 50)
 
-    normalIndices = turbineData.getNormalIndices()
+    turbineData.verbose = True
+    normalIndices = turbineData.getNormalIndices(
+        maxConsecutiveInvalid=0,  # 1 hours of consecutive invalid data
+        maxInvalidRate=0.5,
+        underperformThreshold=1,  # ignore underperf threshold
+    )
 
     ## split training and testing data
     np.random.shuffle(normalIndices)
     n_test = int(len(normalIndices) * TEST_RATIO)
     testIndices = normalIndices[:n_test]
     trainIndices = normalIndices[n_test:]
+    n_val = int(len(trainIndices) * VAL_RATIO)
+    valIndices = trainIndices[:n_val]
+    trainIndices = trainIndices[n_val:]
+
+    print(f"Train: {len(trainIndices)} Val: {len(valIndices)} Test: {len(testIndices)}")
+    print("=" * 50)
 
     targetFeats = [
-        "avgwindspeed",
         "avgpower",
-        "ambienttemperature",
-        "avghumidity",
+        "avgrotorspeed",
+        "avgwindspeed",
         "density",
+        "ambienttemperature",
+        "avgwinddirection",
     ]
-    targetFeatIndices = [turbineData.getIdOfColumn(feat) for feat in targetFeats]
-
+    immuteFeats = [
+        "datetime",
+        "underperformanceprobability",
+    ]
+    # train the transformer
     stdScaler = StandardScaler()
 
+    # h5py requires sorted indices
     sortedTrainIndices = trainIndices.copy()
-    sortedTrainIndices.sort()  # h5py requires sorted indices
+    sortedTrainIndices.sort()
 
-    scalerTrainData = turbineData.data3d[sortedTrainIndices, 0, :][:, targetFeatIndices]
-    print(scalerTrainData.shape)
+    trainData2d = turbineData.data3d[sortedTrainIndices, 0, :]
+    targetFeatIndices = [turbineData.getIdOfColumn(feat) for feat in targetFeats]
+    transformerTrainData = trainData2d[:, targetFeatIndices]
+    print(f"Train data for scaler and imputer {transformerTrainData.shape}")
 
-    stdScaler.fit(scalerTrainData)
+    transformerTrainData = stdScaler.fit_transform(transformerTrainData)
 
-    trainSet, testSet = toTurbineDatasets(
-        turbineData.data3d,
-        (trainIndices, testIndices),
-        targetFeatIndices,
+    indexer, (trainSet, valSet, testSet) = toTurbineDatasets(
+        turbineData,
+        (trainIndices, valIndices, testIndices),  # type: ignore
+        targetFeats,
         stdScaler.transform,
+        immuteFeats,
     )
 
-    print(f"Train sample shape: {trainSet[0][0].shape}")
+    trainLoader = DataLoader(trainSet, batch_size=64, shuffle=True, pin_memory=True)
+    valLoader = DataLoader(valSet, batch_size=64, shuffle=False, pin_memory=True)
+    testLoader = DataLoader(testSet, batch_size=64, shuffle=False, pin_memory=True)
 
-    ## model
-    class Encoder(nn.Module):
-        def __init__(self, latentDim):
-            super().__init__()
-            self.latentDim = latentDim
-
-            # 1 learnable embedding for invalid values
-            self.maskEmbed = nn.Parameter(torch.zeros(1, 1, 1, 1))
-
-            self.conv1 = MaskedConv2d(1, 8, kernel_size=3, stride=2, padding=1)  # 5->3
-            self.conv2 = MaskedConv2d(8, 16, kernel_size=3, stride=2, padding=1)  # 3->2
-            self.conv3 = MaskedConv2d(16, 32, kernel_size=2)  # 2->1
-            self.flatten = nn.Flatten()
-            self.fc1 = nn.Linear(5728, 2048)
-            self.fc2 = nn.Linear(2048, latentDim)
-
-        def forward(self, x, mask):
-            if mask is None:
-                raise ValueError("Mask is required")
-
-            xShapeLen = len(x.shape)
-            if mask.shape != x.shape[0 : xShapeLen - 1]:
-                raise ValueError(
-                    "Mask shape must cover til x's time steps: "
-                    + str(mask.shape)
-                    + " != "
-                    + str(x.shape[0 : xShapeLen - 1])
-                )
-
-            maskAdd1 = mask.unsqueeze(-1).expand_as(x)
-            x = x * maskAdd1 + (1 - maskAdd1) * self.maskEmbed
-
-            x, mask = self.conv1(x, mask)
-            x = torch.relu(x)
-            x, mask = self.conv2(x, mask)
-            x = torch.relu(x)
-            x, mask = self.conv3(x, mask)
-            x = torch.relu(x)
-            x = self.flatten(x)
-            x = self.fc1(x)
-            x = torch.relu(x)
-            x = self.fc2(x)
-
-            return x
-
-    class Decoder(nn.Module):
-        def __init__(self, latentDim):
-            super().__init__()
-            self.latentDim = latentDim
-
-            self.fc1 = nn.Linear(latentDim, 2048)
-            self.fc2 = nn.Linear(2048, 5728)
-            self.conv1 = nn.ConvTranspose2d(32, 16, kernel_size=2)
-            self.conv2 = nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1)
-            self.conv3 = nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1)
-
-        def forward(self, x):
-            x = self.fc1(x)
-            x = torch.relu(x)
-            x = self.fc2(x)
-            x = torch.relu(x)
-            x = x.view(-1, 32, 179, 1)
-            x = self.conv1(x)
-            x = torch.relu(x)
-            x = self.conv2(x)
-            x = torch.relu(x)
-            x = self.conv3(x)
-            x = torch.sigmoid(x)
-
-            return x
-
-    class Autoencoder(nn.Module):
-
-        def __init__(self, latent_dim: int):
-            super().__init__()
-            self.encoder = Encoder(latent_dim)
-            self.decoder = Decoder(latent_dim)
-
-        def forward(self, x, mask=None):
-            latent = self.encoder(x, mask)
-            reconstructed = self.decoder(latent)
-            return reconstructed
-
+    first_batch = next(iter(trainLoader)).permute(0, 2, 1)
+    inputShape = first_batch[0].size()
+    print(f"Data shape: {inputShape}")
+    
     # test if the model is working
-    testModel = Autoencoder(1024)
+    testModel = Autoencoder(inputShape, inputShape[0] * inputShape[1] // COMPRESSION)
 
-    # pass a random tensor to the model
-    x = torch.randn(32, 1, 720, 5)
-
-    output = testModel(x, mask=torch.ones(x.shape[:3]))
-
-    print(f"Expected output shape: {x.shape}")
-    print(f"Output shape: {output.shape}")
-
-    del testModel
-    del x
-    del output
-
-    # training
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
-
-    trainLoader = DataLoader(trainSet, batch_size=32, shuffle=True, pin_memory=True)
-    testLoader = DataLoader(testSet, batch_size=32, shuffle=False, pin_memory=True)
-
-    model = Autoencoder(1024).to(device)
-    criterion = maskedMseLoss
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-
-    for epoch in range(10):
-        model.train()
-        epoLoss = 0
-
-        for i, (x, mask) in enumerate(trainLoader):
-            x, mask = x.float().to(device), mask.float().to(device)
-
-            reconstructions = model(x, mask)
-
-            # reconstruct is smaller than the original timeseries
-            reconstructedTimeseries = reconstructions.shape[-2]
-            # truncate the original timeseries to match the reconstructed timeseries
-            x = x[:, :, :reconstructedTimeseries, :]
-            mask = mask[:, :, :reconstructedTimeseries]
-
-            loss = criterion(reconstructions, x, mask)
-            epoLoss += loss.item()
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            if i % 10 == 0:
-                print(f"Epoch: {epoch}, Batch: {i}, Loss: {loss.item()}")
-
-        print(f"Epoch: {epoch}, AvgLoss: {epoLoss / len(trainLoader)}")
-
+    summary(testModel, inputShape, device="cpu")
+    print("=" * 50)
+    
+    
 
 if __name__ == "__main__":
+    # Set random seed for reproducibility
+    random.seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+    torch.manual_seed(RANDOM_SEED)
+    torch.cuda.manual_seed(RANDOM_SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     main()

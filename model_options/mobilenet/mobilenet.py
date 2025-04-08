@@ -5,8 +5,8 @@ from torch.nn import (
     Sequential,
     ReLU,
     Hardswish,
-    Conv2d,
-    BatchNorm2d,
+    Conv1d,
+    BatchNorm1d,
     Linear,
     Hardsigmoid,
     Flatten,
@@ -33,7 +33,7 @@ BNECKS_OF_SMALL = [
 ]
 
 
-def createConv2dBlock(
+def createConv1dBlock(
     in_channels,
     out_channels,
     kernel_size,
@@ -44,7 +44,7 @@ def createConv2dBlock(
     bn_eps=BN_EPS,
     bn_momentum=BN_MOMENTUM,
 ):
-    """Create a Conv2d block with optional BatchNorm and activation
+    """Create a Conv1d block with optional BatchNorm and activation
 
     Args:
         in_channels (int): number of input channels
@@ -59,14 +59,14 @@ def createConv2dBlock(
         bn_momentum (int, optional): momentumn of batch norm. Defaults to BN_MOMENTUM.
 
     Returns:
-        Sequential: a sequential block of Conv2d, BatchNorm2d and activation
+        Sequential: a sequential block of Conv1d, BatchNorm1d and activation
     """
 
     padding = kernel_size // 2  # same padding
 
     layer = Sequential()
     layer.append(
-        Conv2d(
+        Conv1d(
             in_channels,
             out_channels,
             kernel_size,
@@ -76,7 +76,7 @@ def createConv2dBlock(
             bias=bias,
         )
     )
-    layer.append(BatchNorm2d(out_channels, eps=bn_eps, momentum=bn_momentum))
+    layer.append(BatchNorm1d(out_channels, eps=bn_eps, momentum=bn_momentum))
     if activation is not None:
         layer.append(activation)
     return layer
@@ -100,12 +100,13 @@ class SqueezeExcite(Module):
 
     def forward(self, x):
         identity = x
-        batch, c, h, w = x.size()
+        batch, c, t = x.size()  # (batch, channels, time)
+        
+        x = F.avg_pool1d(x, (t,)).view(batch, -1)
 
-        x = F.avg_pool2d(x, (h, w)).view(batch, -1)
         x = self.fcR(x)
         x = self.fcHS(x)
-        x = x.view(batch, c, 1, 1)
+        x = x.view(batch, c, 1)
 
         return x * identity
 
@@ -127,7 +128,7 @@ class Bottleneck(Module):
         self.use_se = use_se
         self.connectFlag = in_channels == out_channels and stride == 1
 
-        self.conv1 = createConv2dBlock(
+        self.conv1 = createConv1dBlock(
             in_channels,
             expand_channels,
             kernel_size=1,
@@ -138,7 +139,7 @@ class Bottleneck(Module):
         )
 
         # depthwise convolution
-        self.dconv1 = createConv2dBlock(
+        self.dconv1 = createConv1dBlock(
             expand_channels,
             expand_channels,
             kernel_size=kernel_size,
@@ -151,7 +152,7 @@ class Bottleneck(Module):
 
         self.squeeze = SqueezeExcite(expand_channels)
 
-        self.conv2 = createConv2dBlock(
+        self.conv2 = createConv1dBlock(
             expand_channels,
             out_channels,
             kernel_size=1,
@@ -176,12 +177,11 @@ class Bottleneck(Module):
         return x
 
 
-class CustomMobileNetSmall(Module):
+class MobileNetEncoder(Module):
 
     def __init__(
         self,
         in_channels,
-        k_size,
         n_classes,
         bnecks=None,
         dropout=0.2,
@@ -189,14 +189,14 @@ class CustomMobileNetSmall(Module):
         bn_momentum=BN_MOMENTUM,
         se_reduction=SE_REDUCTION,
     ) -> None:
-        super(CustomMobileNetSmall, self).__init__()
+        super(MobileNetEncoder, self).__init__()
         self.n_classes = n_classes
         self.dropout = dropout
 
-        self.conv1 = createConv2dBlock(
+        self.conv1 = createConv1dBlock(
             in_channels,
             16,
-            kernel_size=k_size,
+            kernel_size=3,
             stride=2,
             activation=Hardswish(),
             bn_eps=bn_eps,
@@ -204,7 +204,7 @@ class CustomMobileNetSmall(Module):
         )
 
         self.invRes = Sequential()
-        layers = bnecks or self.BNECKS_OF_SMALL
+        layers = bnecks or BNECKS_OF_SMALL
 
         for inp, out, exp, k, act, se, s in layers:
             self.invRes.append(
@@ -212,9 +212,9 @@ class CustomMobileNetSmall(Module):
             )
 
         self.eConv2 = Sequential(
-            Conv2d(96, 576, kernel_size=1, stride=1),
+            Conv1d(96, 576, kernel_size=1, stride=1),
             SqueezeExcite(576, se_reduction),
-            BatchNorm2d(576, eps=bn_eps, momentum=bn_momentum),
+            BatchNorm1d(576, eps=bn_eps, momentum=bn_momentum),
             Hardswish(),
         )
 
@@ -231,8 +231,8 @@ class CustomMobileNetSmall(Module):
         x = self.invRes(x)
         x = self.eConv2(x)
 
-        _, _, h, w = x.size()
-        x = F.avg_pool2d(x, (h, w))
+        _, _, t = x.size()
+        x = F.avg_pool1d(x, (t,))
 
         x = self.conv3(x)
 

@@ -147,12 +147,9 @@ class MobileNetDecoder(Module):
         self.conv1 = Sequential(
             Unflatten(1, (576, 1)),  # Reshape to (batch, channels, 1)
             createConv1dBlock(
-                576, 576, 1, Hardswish(), bn_eps=bn_eps, bn_momentum=bn_momentum
+                576, 96, 1, Hardswish(), bn_eps=bn_eps, bn_momentum=bn_momentum
             ),
         )
-
-        # SE block (mirroring encoder)
-        self.se_block = SqueezeExcite(576, se_reduction)
 
         # Bottleneck layers (upsampling)
         self.invRes = Sequential()
@@ -186,7 +183,6 @@ class MobileNetDecoder(Module):
     def forward(self, x):
         x = self.projection(x)
         x = self.conv1(x)
-        x = self.se_block(x)
         x = self.invRes(x)
         x = self.upsample(x)
 

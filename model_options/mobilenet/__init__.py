@@ -1,10 +1,10 @@
-from torch import Module
+from torch.nn import Module
 
 from model_options.mobilenet.invert_mobilenet import MobileNetDecoder
 from model_options.mobilenet.mobilenet import MobileNetEncoder
 
 
-class Autoencoder(Module):
+class MobileNetAutoencoder(Module):
     def __init__(self, sampleShape, latent_dim: int):
         super().__init__()
 

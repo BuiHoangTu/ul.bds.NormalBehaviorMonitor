@@ -101,7 +101,7 @@ class SqueezeExcite(Module):
     def forward(self, x):
         identity = x
         batch, c, t = x.size()  # (batch, channels, time)
-        
+
         x = F.avg_pool1d(x, (t,)).view(batch, -1)
 
         x = self.fcR(x)

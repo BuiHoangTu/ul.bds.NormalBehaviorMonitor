@@ -4,9 +4,10 @@ from sklearn.discriminant_analysis import StandardScaler
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from support_classes.cls_dataset import toTurbineDatasets
+from data.data import listTurbines
+from preprocess.cls_dataset import toTurbineDatasets
 from model_options.model_simple_singular import Autoencoder
-from prepare_data import TurbineData, listTurbines
+from preprocess.transform_data import TurbineData
 from torchsummary import summary
 
 

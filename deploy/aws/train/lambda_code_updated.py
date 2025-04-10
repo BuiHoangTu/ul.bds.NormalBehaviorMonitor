@@ -1,41 +1,21 @@
 import boto3
-import datetime
 import os
 
 
 def lambda_handler(event, context):
-    sm = boto3.client("sagemaker")
-    job_name = f"training-job-{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+    # # 1. Download code from GitHub (or use `git clone` in Lambda)
+    # os.system("git clone -b deploy-aws https://github.com/your/repo.git /tmp/repo")
 
-    response = sm.create_training_job(
-        TrainingJobName=job_name,
-        AlgorithmSpecification={
-            "TrainingImage": "763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-training:2.0.1-cpu-py310-ubuntu20.04",
-            "TrainingInputMode": "File",
-        },
-        RoleArn="arn:aws:iam::<YOUR_ACCOUNT_ID>:role/<SAGEMAKER_EXEC_ROLE>",
-        InputDataConfig=[
-            {
-                "ChannelName": "training",
-                "DataSource": {
-                    "S3DataSource": {
-                        "S3DataType": "S3Prefix",
-                        "S3Uri": "s3://your-bucket/input-data/",
-                        "S3DataDistributionType": "FullyReplicated",
-                    }
-                },
-                "ContentType": "text/csv",
-                "InputMode": "File",
-            },
-        ],
-        OutputDataConfig={"S3OutputPath": "s3://your-bucket/output/"},
-        ResourceConfig={
-            "InstanceType": "ml.m5.large",
-            "InstanceCount": 1,
-            "VolumeSizeInGB": 30,
-        },
-        StoppingCondition={"MaxRuntimeInSeconds": 3600},
-        HyperParameters={"epochs": "10", "batch_size": "32", "lr": "0.001"},
-    )
+    # # 2. Upload to S3
+    # s3 = boto3.client("s3")
+    # for root, _, files in os.walk("/tmp/repo"):
+    #     for file in files:
+    #         local_path = os.path.join(root, file)
+    #         s3_path = local_path.replace("/tmp/repo/", "")
+    #         s3.upload_file(local_path, "your-bucket", f"code/{s3_path}")
 
-    return {"statusCode": 200, "body": f"Started training job: {job_name}"}
+    # # 3. Start SageMaker Training
+    # sagemaker = boto3.client("sagemaker")
+    # sagemaker.create_training_job(...)  # Your config here
+
+    print("Lambda function executed successfully.")

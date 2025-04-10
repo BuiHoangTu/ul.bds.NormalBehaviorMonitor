@@ -1,0 +1,16 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "nbm"
+region = "eu-west-1"
+
+[default.sync.parameters]
+template_file = "/home/tu/code-py/ul-aws/deploy/aws/train/code-updated/template.yaml"
+dependency_layer = false
+watch = true
+
+[default.build.parameters]
+template_file = "/home/tu/code-py/ul-aws/deploy/aws/train/code-updated/template.yaml"
+cached = true
+parallel = true
+use_container = true

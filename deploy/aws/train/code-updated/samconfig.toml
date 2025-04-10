@@ -3,7 +3,7 @@
 version = 0.1
 
 [default.global.parameters]
-stack_name = "code-updated"
+stack_name = "nbm-code-updated"
 
 [default.build.parameters]
 parallel = true

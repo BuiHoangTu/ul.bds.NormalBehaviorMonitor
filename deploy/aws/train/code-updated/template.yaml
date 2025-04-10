@@ -13,15 +13,18 @@ Resources:
   CodeUpdatedTrigger:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      PackageType: Image
-      Architectures:
-        - x86_64
       Events:
-        HelloWorld:
+        CodeUpdated:
           Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
           Properties:
             Path: /code-updated
             Method: post
+      CodeUri: code_updated
+      Runtime: python3.12
+      Handler: app.lambda_handler
+      MemorySize: 3008
+      Timeout: 30
+      Environment: {}
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: ./code_updated

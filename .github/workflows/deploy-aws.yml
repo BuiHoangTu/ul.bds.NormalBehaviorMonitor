@@ -1,0 +1,30 @@
+name: Deploy on AWS
+on:
+  pull_request:
+    branches:
+      - aws-deploy
+    paths-ignore:
+      - deploy/**
+      - .github/workflows/**
+  workflow_dispatch:
+
+jobs:
+  notify-aws:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub_Actions_Role
+          aws-region: eu-west-1
+          role-session-name: github=$${{ github.run_id}}
+
+      - name: Fetch caller identity
+        run: |
+          aws sts get-caller-identity

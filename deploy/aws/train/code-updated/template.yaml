@@ -41,5 +41,5 @@ Outputs:
     Description: CodeUpdatedTrigger Lambda Function ARN
     Value: !GetAtt CodeUpdatedTrigger.Arn
   CodeUpdatedTriggerIamRole:
-    Description: Implicit IAM Role created for Hello World function
+    Description: Implicit IAM Role created for updating code base
     Value: !GetAtt CodeUpdatedTrigger.Arn

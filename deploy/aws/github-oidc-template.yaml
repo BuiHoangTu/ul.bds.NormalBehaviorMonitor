@@ -1,5 +1,11 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: GitHub OIDC for when GitHub wants to communicate with AWS.
+
+Parameters:
+  CodeUpdatedTrigger:
+    Type: String
+    Description: The ARN of the Lambda function that will be triggered by GitHub Actions.
+
 Resources:
 
   # This is the bare-bones role.
@@ -18,10 +24,11 @@ Resources:
               StringLike:
                 ## THESE ARE CASE SENSITIVE!
                 token.actions.githubusercontent.com:sub:
-                  - repo:BuiHoangTu/ul.bds.NormalBehaviorMonitor
+                  - repo:BuiHoangTu/ul.bds.NormalBehaviorMonitor:*
               StringEqualsIgnoreCase:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
       Policies:
+        ## deny other actions
         - PolicyName: OidcSafetyPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -31,17 +38,23 @@ Resources:
                 Action:
                   - sts:AssumeRole
                 Resource: '*'
-        - PolicyName: GitHubActionsDeployPolicy
+        - PolicyName: GitHubActionsLambdaInvokePolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: AllowS3Actions
+              - Sid: AllowLambdaInvoke
                 Effect: Allow
                 Action:
-                  - s3:PutObject
+                  - lambda:InvokeFunction
                 Resource:
-                  - arn:aws:s3:::ghu2023-demo
-                  - arn:aws:s3:::ghu2023-demo/*
+                  - !Ref 
+                  
+              - Sid: AllowAPIGatewayInvoke
+                Effect: Allow
+                Action:
+                  - execute-api:Invoke
+                Resource:
+                  - !Sub https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/code-updated
 
   # This is the OIDC provider hookup itself. This tells AWS to delegate authN GitHub
   GitHubActionsOidcProvider:

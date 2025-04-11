@@ -14,12 +14,12 @@ lint = true
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
 confirm_changeset = true
-resolve_s3 = true
+resolve_s3 = false
 resolve_image_repos = true
-s3_bucket = "newbucket:nbm-code"
-s3_prefix = "nbm-code-updated"
+s3_bucket = "normal-behavior-monitoring"
+s3_prefix = "source-code"
 region = "eu-west-1"
-disable_rollback = true
+disable_rollback = false
 
 [default.package.parameters]
 resolve_s3 = true

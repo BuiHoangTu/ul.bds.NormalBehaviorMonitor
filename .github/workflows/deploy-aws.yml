@@ -23,7 +23,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHub_Actions_Role
           aws-region: eu-west-1
-          role-session-name: github=$${{ github.run_id}}
+          role-session-name: github-${{ github.run_id}}
 
       - name: Fetch caller identity
         run: |

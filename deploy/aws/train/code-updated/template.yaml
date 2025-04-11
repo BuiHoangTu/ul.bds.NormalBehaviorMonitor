@@ -20,6 +20,8 @@ Resources:
           Properties:
             Path: /code-updated
             Method: post
+            Auth:
+              Authorizer: AWS_IAM
       CodeUri: code_updated
       Runtime: python3.12
       Handler: app.lambda_handler

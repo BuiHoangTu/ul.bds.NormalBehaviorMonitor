@@ -1,0 +1,13 @@
+preprocessing:
+  input_file: 
+  output_dir: data/preprocessed
+
+training:
+  epochs: 100
+  early_stopping: 10
+  batch_size: 96
+  lr: 0.001
+  device: cuda
+  verbose: False
+  input_dir: data/preprocessed
+  output_dir: models

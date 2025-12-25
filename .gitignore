@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+__pycache__
+*.egg-info
+
+## IDE
+# Visual Studio Code
+.vscode/
+
+
+# temporary storage
+/tmp/
+/output/
+/data/preprocessed/
+
+# temporary testing files
+test.py
+test.ipynb
+
+# logs
+*.log*

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nbm"
+version = "0.1.0"
+description = "Notebooks + models project with PyTorch"
+authors = [{ name = "Bui Hoang Tu", email = "you@example.com" }]
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+dependencies = [
+  "numpy",
+  "pandas",
+  "matplotlib",
+  "seaborn",
+  "scikit-learn",
+  "h5py",
+  "pytorch-ignite",
+  "dotenv",
+  "torchinfo",
+  "pyarrow",
+  "pytest",
+  "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+where = ["src/nbm"]
+
+[project.optional-dependencies]
+dev = [
+  "jupyter",
+  "functionize-notebook"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

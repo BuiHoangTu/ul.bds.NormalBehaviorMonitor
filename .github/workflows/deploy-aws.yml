@@ -1,0 +1,41 @@
+name: Deploy on AWS
+on:
+  push:
+    branches:
+      - aws-deploy
+    paths-ignore:
+      - deploy/**
+      - .github/workflows/**
+  workflow_dispatch:
+
+jobs:
+  sync-to-aws:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 # Shallow clone (faster, no history)
+          lfs: true # Fetch LFS files
+          submodules: true # Fetch submodules
+
+      - name: AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+          aws-region: eu-west-1
+          role-session-name: github-${{ github.run_id}}
+
+      - name: Sync files to S3
+        run: |
+          aws s3 sync ./ s3://normal-behaviour-monitoring/source-code/ \
+          --delete \
+          --exclude "deploy/*" \
+          --exclude ".github/workflows/*" \
+          --exclude ".git/*" \
+          --exclude ".git*" \
+          --exclude "**/.git*" \
+          --exclude "*.ipynb"

@@ -1,0 +1,13 @@
+### NOTE
+# This is extra packages for the dev environment.
+
+name: nbm
+channels:
+  # - pytorch
+  # - nvidia
+  - defaults
+  - conda-forge
+dependencies:
+  - ipykernel
+  - pip:
+    - functionize-notebook
